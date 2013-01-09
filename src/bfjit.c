@@ -200,11 +200,13 @@ void p_exec(program_t *program, int min_arena_size) {
   uint32_t payload;
   byte bytecode;
 
- begin:
-  bytecode = get_bytecode(pc);
-  payload = get_payload(pc, 0);
+#define dispatch(pc) do {				\
+       payload = get_payload(pc, 0);			\
+       bytecode = get_bytecode(pc);			\
+       goto *labels[bytecode];				\
+  } while(0)
 
-  goto *labels[bytecode];
+  dispatch(pc);
 
   bc_shift:
     arena_idx += (int32_t) payload;
@@ -212,22 +214,22 @@ void p_exec(program_t *program, int min_arena_size) {
 	 die("arena pointer out of bounds!");
     }
     pc += get_total_length(BC_SHIFT);
-    goto begin;
+    dispatch(pc);
 
   bc_add:
     arena[arena_idx] += (int32_t) payload;
     pc += get_total_length(BC_ADD);
-    goto begin;
+    dispatch(pc);
 
   bc_output:
     printf("%c", arena[arena_idx]);
     pc += get_total_length(BC_OUTPUT);
-    goto begin;
+    dispatch(pc);
 
   bc_input:
     scanf("%c", &arena[arena_idx]);
     pc += get_total_length(BC_INPUT);
-    goto begin;
+    dispatch(pc);
 
   bc_loop_begin:
     /*  A loop is expected to run at least a few times -- hence the
@@ -235,15 +237,15 @@ void p_exec(program_t *program, int min_arena_size) {
     if (unlikely(!arena[arena_idx])) {
       uint32_t delta = get_payload(pc, 1);
       pc += delta;
-      goto begin;
+      dispatch(pc);
     }
     program->heat_counters[payload]++;
     pc += get_total_length(BC_LOOP_BEGIN);
-    goto begin;
+    dispatch(pc);
 
   bc_loop_end:
     pc -= payload;
-    goto begin;
+    dispatch(pc);
 
   bc_hlt:
     goto end;
