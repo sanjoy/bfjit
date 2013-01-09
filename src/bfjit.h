@@ -13,7 +13,8 @@ enum bytecode {
   BC_OUTPUT, BC_INPUT,
   BC_LOOP_BEGIN, BC_LOOP_END,
   BC_COMPILED_LOOP,
-  BC_HLT
+  BC_HLT,
+  BC_NUM_BYTECODES
 };
 
 typedef void (*compiled_code_t) (char *);

@@ -157,63 +157,73 @@ void p_exec(program_t *program, int min_arena_size) {
   int arena_idx = 0;
 
   byte *pc = program->bytecode;
-  while (1) {
-    byte bytecode = *pc;
-    uint32_t payload = *((uint32_t *) (pc + 1));
 
-    switch (bytecode) {
-      case BC_SHIFT:
-        arena_idx += (int32_t) payload;
-        if (unlikely(arena_idx < 0 || arena_idx >= arena_size)) {
-          die("arena pointer out of bounds!");
-        }
-        pc += 5;
-        break;
+  const void *labels [BC_NUM_BYTECODES];
+  labels[BC_SHIFT] = &&bc_shift;
+  labels[BC_ADD] = &&bc_add;
+  labels[BC_OUTPUT] = &&bc_output;
+  labels[BC_INPUT] = &&bc_input;
+  labels[BC_LOOP_BEGIN] = &&bc_loop_begin;
+  labels[BC_LOOP_END] = &&bc_loop_end;
+  labels[BC_HLT] = &&bc_hlt;
+  labels[BC_COMPILED_LOOP] = &&bc_compiled_loop;
 
-      case BC_ADD:
-        arena[arena_idx] += (int32_t) payload;
-        pc += 5;
-        break;
+  uint32_t payload;
+  byte bytecode;
 
-      case BC_OUTPUT:
-        printf("%c", arena[arena_idx]);
-        pc ++;
-        break;
+ begin:
+  bytecode = *pc;
+  payload = *((uint32_t *) (pc + 1));
 
-      case BC_INPUT:
-        scanf("%c", &arena[arena_idx]);
-        pc ++;
-        break;
+  goto *labels[bytecode];
 
-      case BC_LOOP_BEGIN:
-        /*  A loop is expected to run at least a few times -- hence
-         *  the `unlikely'  */
-        if (unlikely(!arena[arena_idx])) {
-          uint32_t delta = *((uint32_t *) (pc + 5));
-          pc += delta;
-          break;
-        }
-        program->heat_counters[payload]++;
-        pc += 9;
-        break;
-
-      case BC_LOOP_END:
-        pc -= payload;
-        break;
-
-      case BC_HLT:
-        goto end;
-
-      case BC_COMPILED_LOOP:
-        die("bc_compiled_loop");
-
-      case BC_INVALID:
-        die("uninitialized opcode!");
-
-      default:
-        die("unknown opcode encountered!");
+  bc_shift:
+    arena_idx += (int32_t) payload;
+    if (unlikely(arena_idx < 0 || arena_idx >= arena_size)) {
+	 die("arena pointer out of bounds!");
     }
-  }
+    pc += 5;
+    goto begin;
+
+  bc_add:
+    arena[arena_idx] += (int32_t) payload;
+    pc += 5;
+    goto begin;
+
+  bc_output:
+    printf("%c", arena[arena_idx]);
+    pc ++;
+    goto begin;
+
+  bc_input:
+    scanf("%c", &arena[arena_idx]);
+    pc ++;
+    goto begin;
+
+  bc_loop_begin:
+    /*  A loop is expected to run at least a few times -- hence the
+     *  `unlikely'  */
+    if (unlikely(!arena[arena_idx])) {
+	 uint32_t delta = *((uint32_t *) (pc + 5));
+	 pc += delta;
+	 goto begin;
+    }
+    program->heat_counters[payload]++;
+    pc += 9;
+    goto begin;
+
+  bc_loop_end:
+    pc -= payload;
+    goto begin;
+
+  bc_hlt:
+    goto end;
+
+  bc_compiled_loop:
+    die("bc_compiled_loop");
+
+  bc_invalid:
+    die("uninitialized opcode!");
 
 end:
   free(arena);
