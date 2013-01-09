@@ -322,5 +322,5 @@ void p_print_bc(FILE *fptr, program_t *prog) {
   }
 
 end:
-  return;
+  fprintf(fptr, "\n");
 }

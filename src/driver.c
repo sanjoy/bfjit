@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 static char *read_whole_file(const char *file_name) {
   FILE *fptr = fopen(file_name, "r");
@@ -24,16 +25,23 @@ static char *read_whole_file(const char *file_name) {
   return file_contents;
 }
 
-static void dispatch(const char *file_name) {
+static void dispatch(const char *file_name, int print_only) {
   char *source = read_whole_file(file_name);
   program_t *prog = p_new(source);
-  //p_print_bc(stdout, prog);
-  p_exec(prog, 30000);
+  if (print_only) {
+    p_print_bc(stdout, prog);
+  } else {
+    p_exec(prog, 30000);
+  }
   p_destroy(prog);
 }
 
 int main(int argc, char **argv) {
-  if (argc != 2) die("usage: %s <source file name>", argv[0]);
-  dispatch(argv[1]);
+  if (argc == 1) die("usage: %s [--print-bc-only] <source file name>", argv[0]);
+  if (argc == 2) {
+    dispatch(argv[1], 0);
+  } else {
+    dispatch(argv[2], !strcmp(argv[1], "--print-bc-only"));
+  }
   return 0;
 }
