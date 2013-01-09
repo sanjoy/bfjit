@@ -17,7 +17,9 @@ enum bytecode {
   BC_NUM_BYTECODES
 };
 
-typedef void (*compiled_code_t) (char *);
+typedef byte *(*compiled_code_t) (char *arena);
+
+#define kHotFunctionThreshold 255;
 
 typedef struct {
   const char *src;
@@ -25,7 +27,7 @@ typedef struct {
   compiled_code_t *compiled_code;
   int compiled_code_len;
   int compiled_code_capacity;
-  byte *heat_counters;
+  int heat_counters[256];
 } program_t;
 
 program_t *p_new(const char *source);

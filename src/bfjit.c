@@ -1,4 +1,5 @@
 #include "bfjit.h"
+#include "compiler.h"
 #include "utils.h"
 
 #include <assert.h>
@@ -50,9 +51,10 @@ static int32_t fold_actions(src_t *src, char increment, char decrement) {
 const int kByteCodeLen = 4;
 const int kPayloadLen = 4;
 
-static int get_bytecode(byte *pc) __attribute__((always_inline));
-static uint32_t get_payload(byte *pc, int payload_index);
-static int get_total_length(int bc) __attribute__((always_inline));
+static inline int get_bytecode(byte *pc) __attribute__((always_inline));
+static inline uint32_t get_payload(byte *pc, int payload_index)
+    __attribute__((always_inline));
+static inline int get_total_length(int bc) __attribute__((always_inline));
 
 static int get_bytecode(byte *pc) {
   return *pc;
@@ -79,6 +81,7 @@ static int get_total_length(int bc) {
     case BC_LOOP_BEGIN:
       return kByteCodeLen + 2 * kPayloadLen;
   }
+  return -1;
 }
 
 /*  Expects a valid prog->src.  Fills in prog->bytecode,
@@ -133,7 +136,8 @@ static void translate(program_t *prog, int stack_limit) {
         src.index++;
         loop_stack[loop_stack_len++] = bytecode_len;
         append_byte4(BC_LOOP_BEGIN);
-        append_byte4(heat_counters_len++);
+        append_byte4(heat_counters_len);
+        heat_counters_len = (heat_counters_len + 1) % 256;
         /* we need not worry heat_counters_len wrapping around. */
         append_byte4(0); /* this will be adjusted on the `]'  */
         break;
@@ -163,7 +167,8 @@ end:
 
   if (loop_stack_len != 0) die("unterminated loop!");
 
-  prog->heat_counters = calloc(sizeof(byte), heat_counters_len);
+  for (int i = 0; i < heat_counters_len; i++)
+    prog->heat_counters[i] = kHotFunctionThreshold;
   free(loop_stack);
 }
 
@@ -239,7 +244,15 @@ void p_exec(program_t *program, int min_arena_size) {
       pc += delta;
       dispatch(pc);
     }
-    program->heat_counters[payload]++;
+    program->heat_counters[payload] --;
+    if (unlikely(program->heat_counters[payload] == 0)) {
+      int location = compile_and_install(program, pc);
+      if (likely(location != -1)) {
+        pc = program->compiled_code[location](arena);
+        dispatch(pc);
+      }
+      program->heat_counters[payload] = kHotFunctionThreshold;
+    }
     pc += get_total_length(BC_LOOP_BEGIN);
     dispatch(pc);
 
@@ -251,10 +264,8 @@ void p_exec(program_t *program, int min_arena_size) {
     goto end;
 
   bc_compiled_loop:
-    die("bc_compiled_loop");
-
-  bc_invalid:
-    die("uninitialized opcode!");
+    pc = program->compiled_code[get_payload(pc, 0)](arena);
+    dispatch(pc);
 
 end:
   free(arena);
@@ -263,19 +274,17 @@ end:
 void p_destroy(program_t *prog) {
   free(prog->bytecode);
   free(prog->compiled_code);
-  free(prog->heat_counters);
   free(prog);
 }
 
 void p_print_bc(FILE *fptr, program_t *prog) {
-  int index = 0;
   byte *pc = prog->bytecode;
 
   while (1) {
     {
       intptr_t begin = (intptr_t) prog->bytecode;
       intptr_t current = (intptr_t) pc;
-      fprintf(fptr, "%d: ", current - begin);
+      fprintf(fptr, "%d: ", (int) (current - begin));
     }
 
     int bc = get_bytecode(pc);

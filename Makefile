@@ -1,9 +1,16 @@
-CFLAGS=-O3 -g -std=gnu99
+.PHONY: all clean
+
+CFLAGS=-O3 -Wall -Werror -g -std=gnu99
+HEADERS=src/bfjit.h src/utils.h src/compiler.h
 
 all:: bf
 
-bf: bfjit.o utils.o driver.o
+bf: bfjit.o utils.o driver.o compiler.o
 	$(CC) $^ -o $@
 
-%.o: src/%.c src/bfjit.h src/utils.h
+%.o: src/%.c $(HEADERS)
 	$(CC) -c $(CFLAGS) $< -o $@
+
+clean:
+	$(RM) *.o
+	$(RM) bf
