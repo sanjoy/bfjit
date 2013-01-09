@@ -1,4 +1,5 @@
 BFJIT
 =====
 
-A high-performance for the emerging language, brainf*ck.
+A high-performance VM for the emerging language, brainf*ck.  The goal
+is to have a (fast) interpreter which then JIT compiles hot loops.
