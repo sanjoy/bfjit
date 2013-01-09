@@ -47,6 +47,40 @@ static int32_t fold_actions(src_t *src, char increment, char decrement) {
   return effective_action;
 }
 
+const int kByteCodeLen = 4;
+const int kPayloadLen = 4;
+
+static int get_bytecode(byte *pc) __attribute__((always_inline));
+static uint32_t get_payload(byte *pc, int payload_index);
+static int get_total_length(int bc) __attribute__((always_inline));
+
+static int get_bytecode(byte *pc) {
+  return *pc;
+}
+
+static uint32_t get_payload(byte *pc, int payload_index) {
+  uint32_t *buffer = (uint32_t *) (pc + kByteCodeLen);
+  return buffer[payload_index];
+}
+
+static int get_total_length(int bc) {
+  switch (bc) {
+    case BC_SHIFT:
+    case BC_ADD:
+    case BC_LOOP_END:
+    case BC_COMPILED_LOOP:
+      return kByteCodeLen + kPayloadLen;
+
+    case BC_OUTPUT:
+    case BC_INPUT:
+    case BC_HLT:
+      return kByteCodeLen;
+
+    case BC_LOOP_BEGIN:
+      return kByteCodeLen + 2 * kPayloadLen;
+  }
+}
+
 /*  Expects a valid prog->src.  Fills in prog->bytecode,
  *  prog->bytecode_len,  prog->heat_counters.  */
 static void translate(program_t *prog, int stack_limit) {
@@ -55,11 +89,6 @@ static void translate(program_t *prog, int stack_limit) {
 
   prog->bytecode = malloc(capacity);
   int bytecode_len = 0;
-
-#define append_byte(value) do {                                 \
-    ensure_space(prog->bytecode, bytecode_len, capacity, 1);    \
-    prog->bytecode[bytecode_len++] = value;                     \
-  } while(0)
 
 #define append_byte4(value) do {                                \
     ensure_space(prog->bytecode, bytecode_len, capacity, 4);    \
@@ -80,30 +109,30 @@ static void translate(program_t *prog, int stack_limit) {
     switch (c) {
       case '<':
       case '>':
-        append_byte(BC_SHIFT);
+        append_byte4(BC_SHIFT);
         append_byte4(fold_actions(&src, '>', '<'));
         break;
 
       case '+':
       case '-':
-        append_byte(BC_ADD);
+        append_byte4(BC_ADD);
         append_byte4(fold_actions(&src, '+', '-'));
         break;
 
       case '.':
         src.index++;
-        append_byte(BC_OUTPUT);
+        append_byte4(BC_OUTPUT);
         break;
 
       case ',':
         src.index++;
-        append_byte(BC_INPUT);
+        append_byte4(BC_INPUT);
         break;
 
       case '[':
         src.index++;
         loop_stack[loop_stack_len++] = bytecode_len;
-        append_byte(BC_LOOP_BEGIN);
+        append_byte4(BC_LOOP_BEGIN);
         append_byte4(heat_counters_len++);
         /* we need not worry heat_counters_len wrapping around. */
         append_byte4(0); /* this will be adjusted on the `]'  */
@@ -114,10 +143,10 @@ static void translate(program_t *prog, int stack_limit) {
         if (loop_stack_len == 0) die("unexpected `]'");
         uint32_t begin_pc = loop_stack[--loop_stack_len];
         uint32_t delta = bytecode_len - begin_pc;
-        append_byte(BC_LOOP_END);
+        append_byte4(BC_LOOP_END);
         append_byte4(delta);
-        *((uint32_t *) (&prog->bytecode[begin_pc] + 5)) =
-            bytecode_len - begin_pc;
+        byte *patch_pc = &prog->bytecode[begin_pc] + kByteCodeLen + kPayloadLen;
+        *((uint32_t *) patch_pc) = bytecode_len - begin_pc;
         break;
       }
 
@@ -130,7 +159,7 @@ static void translate(program_t *prog, int stack_limit) {
   }
 
 end:
-  append_byte(BC_HLT);
+  append_byte4(BC_HLT);
 
   if (loop_stack_len != 0) die("unterminated loop!");
 
@@ -172,8 +201,8 @@ void p_exec(program_t *program, int min_arena_size) {
   byte bytecode;
 
  begin:
-  bytecode = *pc;
-  payload = *((uint32_t *) (pc + 1));
+  bytecode = get_bytecode(pc);
+  payload = get_payload(pc, 0);
 
   goto *labels[bytecode];
 
@@ -182,34 +211,34 @@ void p_exec(program_t *program, int min_arena_size) {
     if (unlikely(arena_idx < 0 || arena_idx >= arena_size)) {
 	 die("arena pointer out of bounds!");
     }
-    pc += 5;
+    pc += get_total_length(BC_SHIFT);
     goto begin;
 
   bc_add:
     arena[arena_idx] += (int32_t) payload;
-    pc += 5;
+    pc += get_total_length(BC_ADD);
     goto begin;
 
   bc_output:
     printf("%c", arena[arena_idx]);
-    pc ++;
+    pc += get_total_length(BC_OUTPUT);
     goto begin;
 
   bc_input:
     scanf("%c", &arena[arena_idx]);
-    pc ++;
+    pc += get_total_length(BC_INPUT);
     goto begin;
 
   bc_loop_begin:
     /*  A loop is expected to run at least a few times -- hence the
      *  `unlikely'  */
     if (unlikely(!arena[arena_idx])) {
-	 uint32_t delta = *((uint32_t *) (pc + 5));
-	 pc += delta;
-	 goto begin;
+      uint32_t delta = get_payload(pc, 1);
+      pc += delta;
+      goto begin;
     }
     program->heat_counters[payload]++;
-    pc += 9;
+    pc += get_total_length(BC_LOOP_BEGIN);
     goto begin;
 
   bc_loop_end:
@@ -240,56 +269,58 @@ void p_print_bc(FILE *fptr, program_t *prog) {
   int index = 0;
   byte *pc = prog->bytecode;
 
-  while (pc[index] != BC_HLT) {
-    fprintf(fptr, "%d: ", index);
+  while (1) {
+    {
+      intptr_t begin = (intptr_t) prog->bytecode;
+      intptr_t current = (intptr_t) pc;
+      fprintf(fptr, "%d: ", current - begin);
+    }
 
-    switch (pc[index]) {
+    int bc = get_bytecode(pc);
+
+    switch (bc) {
       case BC_INVALID:
         fprintf(fptr, "invalid");
-        index ++;
         break;
 
       case BC_SHIFT:
-        fprintf(fptr, "shift [delta = %d]", *((int32_t *) (pc + index + 1)));
-        index += 5;
+        fprintf(fptr, "shift [delta = %d]", get_payload(pc, 0));
         break;
 
       case BC_ADD:
-        fprintf(fptr, "add [value = %d]", *((int32_t *) (pc + index + 1)));
-        index += 5;
+        fprintf(fptr, "add [value = %d]", get_payload(pc, 0));
         break;
 
       case BC_OUTPUT:
         fprintf(fptr, "output");
-        index ++;
         break;
 
       case BC_INPUT:
         fprintf(fptr, "input");
-        index ++;
         break;
 
       case BC_LOOP_BEGIN:
         fprintf(fptr, "loop-begin [counter-idx = %d] [length = %d]",
-                *((int32_t *) (pc + index + 1)),
-                *((int32_t *) (pc + index + 5)));
-        index += 9;
+                get_payload(pc, 0), get_payload(pc, 1));
         break;
 
       case BC_LOOP_END:
-        fprintf(fptr, "loop-end [length = %d]",
-                *((int32_t *) (pc + index + 1)));
-        index += 5;
+        fprintf(fptr, "loop-end [length = %d]", get_payload(pc, 0));
         break;
 
       case BC_COMPILED_LOOP:
         fprintf(fptr, "compiled-loop");
-        index += 5;
         break;
+
+      case BC_HLT:
+        fprintf(fptr, "hlt");
+        goto end;
     }
 
     fprintf(fptr, "\n");
+    pc += get_total_length(bc);
   }
 
-  fprintf(fptr, "%d: hlt\n", index);
+end:
+  return;
 }
