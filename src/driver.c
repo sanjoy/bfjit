@@ -1,4 +1,5 @@
 #include "bfjit.h"
+#include "bytecode.h"
 #include "utils.h"
 
 #include <stdio.h>
@@ -29,7 +30,7 @@ static void dispatch(const char *file_name, int print_only) {
   char *source = read_whole_file(file_name);
   program_t *prog = p_new(source);
   if (print_only) {
-    p_print_bc(stdout, prog);
+    bc_dump(stdout, prog->bytecode);
   } else {
     p_exec(prog, 30000);
   }
