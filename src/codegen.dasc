@@ -34,6 +34,7 @@ static void codegen(program_t *program, dasm_State *state, byte *pc) {
   };
 
 #define dispatch(pc) do {                       \
+    last_bytecode = bytecode;                   \
     payload = get_payload(pc, 0);               \
     bytecode = get_bytecode(pc);                \
     goto *labels[bytecode];                     \
@@ -43,7 +44,8 @@ static void codegen(program_t *program, dasm_State *state, byte *pc) {
   |  mov  PTR, rdi
 
   uint32_t payload;
-  byte bytecode;
+  byte bytecode = -1;
+  byte last_bytecode = -1;
 
   dispatch(pc);
 
@@ -93,16 +95,18 @@ bc_input:
 bc_loop_begin: {
   assert(loop_stack_index < program->loop_stack_size);
 
-  max_label += 2;
+  max_label += 3;
   loop_stack[loop_stack_index++] = max_label;
   dasm_growpc(&state, max_label);
 
   int loop_begin = max_label - 1;
   int loop_end = max_label - 2;
+  int loop_begin_untested = max_label - 3;
 
   |=>(loop_begin):
   | cmp byte [PTR], 0
   | je => loop_end
+  |=>(loop_begin_untested):
 
   pc += get_total_length(BC_LOOP_BEGIN);
   dispatch(pc);
@@ -113,7 +117,12 @@ bc_loop_end: {
   int loop_begin = label_info - 1;
   int loop_end = label_info - 2;
 
-  | jmp =>loop_begin
+  if (last_bytecode == BC_ADD &&
+      ((int32_t) get_payload(pc - get_total_length(BC_ADD), 0)) < 0) {
+    | jnz => (label_info - 3)
+  } else {
+    | jmp =>loop_begin
+  }
   |=> loop_end:
 
   if (loop_stack_index == 0) goto end_codegen;
