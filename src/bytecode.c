@@ -49,34 +49,78 @@ static int32_t fold_actions(src_t *src, char increment, char decrement) {
     bytecode_len += 4;                                  \
   } while(0)
 
+#define peephole_pass(name)                                             \
+  static int peephole_ ## name (                                        \
+      byte **bc_ptr, int *bc_len_ptr, int *cap_ptr, int loop_begin_idx, \
+      int loop_length)
+
+#define peephole_prologue                                               \
+  /*  DO NOT touch these variables: */                                  \
+  byte *bytecode = *bc_ptr;                                             \
+  int capacity = *cap_ptr;                                              \
+                                                                        \
+  /* Be careful about modifying this one:  */                           \
+  int bytecode_len = *bc_len_ptr;                                       \
+                                                                        \
+  /*  Modifying these are okay */                                       \
+  byte *loop_begin = &bytecode[loop_begin_idx];                         \
+  byte *loop_body_begin = &loop_begin[get_total_length(BC_LOOP_BEGIN)]; \
+  int loop_body_length = loop_length - get_total_length(BC_LOOP_BEGIN);
+
+#define peephole_successful                     \
+  *bc_len_ptr = bytecode_len;                   \
+  *bc_ptr = bytecode;                           \
+  *cap_ptr = capacity;                          \
+  return 1;
+
+#define peephole_failed                         \
+  return 0;
+
+#define peep_check(condn) if (!(condn)) peephole_failed
 
 /*  Optimize [-] to a direct zero assignment.  */
-static int nullifying_loop(byte **bc_ptr, int *bc_len_ptr, int *cap_ptr,
-                           int loop_begin_idx, int loop_length) {
-  byte *bytecode = *bc_ptr;
-  int bytecode_len = *bc_len_ptr;
-  int capacity = *cap_ptr;
+peephole_pass(nullifying_loop) {
+  peephole_prologue;
 
-  int nullify_idiom_len =
-      get_total_length(BC_LOOP_BEGIN) + get_total_length(BC_ADD);
+  peep_check(loop_body_length == get_total_length(BC_ADD));
 
-  if (loop_length != nullify_idiom_len) return 0;
+  peep_check(get_bytecode(loop_body_begin) == BC_ADD &&
+             get_payload(loop_body_begin, 0) == -1);
 
-  byte *loop_begin = &bytecode[loop_begin_idx];
-  byte *loop_body_begin = &loop_begin[get_total_length(BC_LOOP_BEGIN)];
-  if (get_bytecode(loop_body_begin) != BC_ADD ||
-      get_payload(loop_body_begin, 0) != -1) {
-    return 0;
-  }
-
-  bytecode_len -= nullify_idiom_len;
+  bytecode_len -= loop_length;
   append_byte4(BC_ZERO);
 
-  *bc_len_ptr = bytecode_len;
-  *bc_ptr = bytecode;
-  *cap_ptr = capacity;
+  peephole_successful;
+}
 
-  return 1;
+peephole_pass(move_value) {
+  peephole_prologue;
+  const int expected_length = 2 * get_total_length(BC_ADD) +
+                              2 * get_total_length(BC_SHIFT);
+
+  peep_check(loop_body_length == expected_length);
+
+  peep_check(get_bytecode(loop_body_begin) == BC_ADD);
+  peep_check(get_payload(loop_body_begin, 0) == -1);
+  loop_body_begin += get_total_length(BC_ADD);
+
+  peep_check(get_bytecode(loop_body_begin) == BC_SHIFT);
+  uint32_t distance = get_payload(loop_body_begin, 0);
+  loop_body_begin += get_total_length(BC_SHIFT);
+
+  peep_check(get_bytecode(loop_body_begin) == BC_ADD);
+  peep_check(get_payload(loop_body_begin, 0) == 1);
+  loop_body_begin += get_total_length(BC_ADD);
+
+  peep_check(get_bytecode(loop_body_begin) == BC_SHIFT);
+  peep_check(get_payload(loop_body_begin, 0) == -distance);
+  loop_body_begin += get_total_length(BC_SHIFT);
+
+  bytecode_len -= loop_length;
+  append_byte4(BC_MOVE_VALUE);
+  append_byte4(distance);
+
+  peephole_successful;
 }
 
 byte *bc_from_source(const char *source, unsigned int *loop_stack_ui,
@@ -137,8 +181,13 @@ byte *bc_from_source(const char *source, unsigned int *loop_stack_ui,
         uint32_t begin_pc = loop_stack[--loop_stack_index];
         uint32_t delta = bytecode_len - begin_pc;
 
-        if (nullifying_loop(&bytecode, &bytecode_len, &capacity, begin_pc,
-                            delta)) {
+        if (peephole_nullifying_loop(&bytecode, &bytecode_len, &capacity,
+                                     begin_pc, delta)) {
+          break;
+        }
+
+        if (peephole_move_value(&bytecode, &bytecode_len, &capacity,begin_pc,
+                                delta)) {
           break;
         }
 
@@ -181,6 +230,10 @@ void bc_dump(FILE *fptr, byte *pc) {
 
       case BC_ADD:
         fprintf(fptr, "add [value = %d]", get_payload(pc, 0));
+        break;
+
+      case BC_MOVE_VALUE:
+        fprintf(fptr, "move_value [value = %d]", get_payload(pc, 0));
         break;
 
       case BC_ZERO:

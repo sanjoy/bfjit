@@ -3,6 +3,8 @@
 #include "bytecode.h"
 #include "compiler.h"
 
+#define ENABLE_JIT 1
+
 void interpret(program_t *program, byte *arena, int arena_size) {
   int arena_idx = 0;
   byte *pc = program->bytecode;
@@ -12,7 +14,7 @@ void interpret(program_t *program, byte *arena, int arena_size) {
     [BC_OUTPUT] = &&bc_output, [BC_INPUT] = &&bc_input,
     [BC_LOOP_BEGIN] = &&bc_loop_begin,
     [BC_LOOP_END] = &&bc_loop_end,
-    [BC_ZERO] = &&bc_zero,
+    [BC_ZERO] = &&bc_zero, [BC_MOVE_VALUE] = &&bc_move_value,
     [BC_HLT] = &&bc_hlt, [BC_COMPILED_LOOP] = &&bc_compiled_loop,
   };
 
@@ -45,6 +47,14 @@ bc_zero:
   pc += get_total_length(BC_ZERO);
   dispatch(pc);
 
+bc_move_value:
+  if (arena[arena_idx] != 0) {
+    arena[arena_idx + payload] += arena[arena_idx];
+    arena[arena_idx] = 0;
+  }
+  pc += get_total_length(BC_MOVE_VALUE);
+  dispatch(pc);
+
 bc_output:
   printf("%c", arena[arena_idx]);
   pc += get_total_length(BC_OUTPUT);
@@ -62,16 +72,18 @@ bc_loop_begin:
     pc += get_payload(pc, 1);
     dispatch(pc);
   }
-  program->heat_counters[payload] --;
-  if (unlikely(program->heat_counters[payload] == 0)) {
-    int location = compile_and_install(program, pc);
-    if (likely(location != -1)) {
-      byte *new_arena = program->compiled_code[location](&arena[arena_idx]);
-      arena_idx = (intptr_t) new_arena - (intptr_t) arena;
-      pc += get_payload(pc, 1);
-      dispatch(pc);
+  if (ENABLE_JIT) {
+    program->heat_counters[payload] --;
+    if (unlikely(program->heat_counters[payload] == 0)) {
+      int location = compile_and_install(program, pc);
+      if (likely(location != -1)) {
+        byte *new_arena = program->compiled_code[location](&arena[arena_idx]);
+        arena_idx = (intptr_t) new_arena - (intptr_t) arena;
+        pc += get_payload(pc, 1);
+        dispatch(pc);
+      }
+      program->heat_counters[payload] = kHotLoopThreshold;
     }
-    program->heat_counters[payload] = kHotLoopThreshold;
   }
   pc += get_total_length(BC_LOOP_BEGIN);
   dispatch(pc);

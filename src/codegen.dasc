@@ -44,6 +44,22 @@ static void codegen(program_t *program, dasm_State *state, byte *pc) {
         pc += get_total_length(BC_ZERO);
 	break;
 
+      case BC_MOVE_VALUE: {
+        int end_label = max_label;
+	max_label++;
+	dasm_growpc(&state, max_label);
+
+        | cmp byte [PTR], 0
+        | je => end_label
+        | mov r8b, byte [PTR]
+        | add byte [PTR + get_payload(pc, 0)], r8b
+        | mov byte [PTR], 0
+        |=> end_label:
+
+	pc += get_total_length(BC_MOVE_VALUE);
+	break;
+      }
+
       case BC_OUTPUT:
         | movzx edi, byte [PTR]
         | callp putchar

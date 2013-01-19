@@ -48,6 +48,9 @@ enum bytecode {
 
   BC_ZERO, /*  optimization bytecode, shortcut for the sequence [-]  */
 
+  BC_MOVE_VALUE, /*  cell[current] += cell[current + payload[0]]
+                  *  cell[current + payload[0]] = 0  */
+
   BC_NUM_BYTECODES
 };
 
@@ -82,6 +85,7 @@ static int get_total_length(int bc) {
     case BC_SHIFT:
     case BC_ADD:
     case BC_LOOP_END:
+    case BC_MOVE_VALUE:
       return kByteCodeLen + kPayloadLen;
 
     case BC_COMPILED_LOOP:
