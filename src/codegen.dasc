@@ -91,7 +91,7 @@ bc_input:
   dispatch(pc);
 
 bc_loop_begin: {
-  assert(loop_stack_index < program->loop_nest_size);
+  assert(loop_stack_index < program->loop_stack_size);
 
   max_label += 2;
   loop_stack[loop_stack_index++] = max_label;
