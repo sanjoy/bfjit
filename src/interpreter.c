@@ -65,7 +65,7 @@ bc_loop_begin:
       pc += get_payload(pc, 1);
       dispatch(pc);
     }
-    program->heat_counters[payload] = kHotFunctionThreshold;
+    program->heat_counters[payload] = kHotLoopThreshold;
   }
   pc += get_total_length(BC_LOOP_BEGIN);
   dispatch(pc);

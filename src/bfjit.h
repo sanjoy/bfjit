@@ -8,8 +8,13 @@
 
 typedef byte *(*compiled_code_t) (byte *arena);
 
-#define kHotFunctionThreshold 255
-#define kNumHeatCounters 256
+#ifndef kHotLoopThreshold
+#define kHotLoopThreshold 15
+#endif
+
+#ifndef kNumHeatCounters
+#define kNumHeatCounters 128
+#endif
 
 typedef struct {
   const char *src;

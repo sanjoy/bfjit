@@ -1,5 +1,7 @@
 #include "bytecode.h"
 
+#include "bfjit.h"
+
 #include <assert.h>
 #include <stdlib.h>
 
@@ -94,7 +96,7 @@ byte *bc_from_source(const char *source, unsigned int *loop_stack_ui,
         loop_stack[loop_stack_index++] = bytecode_len;
         append_byte4(BC_LOOP_BEGIN);
         append_byte4(heat_counters_len);
-        heat_counters_len = (heat_counters_len + 1) % 256;
+        heat_counters_len = (heat_counters_len + 1) % kNumHeatCounters;
         /* we need not worry heat_counters_len wrapping around. */
         append_byte4(0); /* this will be adjusted on the `]'  */
         break;

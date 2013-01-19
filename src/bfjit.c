@@ -24,7 +24,7 @@ program_t *p_new(const char *program_source, int loop_stack_size) {
   prog->compiled_code_len = 0;
 
   for (int i = 0; i < kNumHeatCounters; i++) {
-    prog->heat_counters[i] = kHotFunctionThreshold;
+    prog->heat_counters[i] = kHotLoopThreshold;
   }
 
   return prog;
