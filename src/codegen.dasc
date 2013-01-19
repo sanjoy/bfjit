@@ -24,101 +24,118 @@ static void codegen(program_t *program, dasm_State *state, byte *pc) {
   unsigned int max_label = 1;
   unsigned int end_label = 0;
 
+  static const void *labels [BC_NUM_BYTECODES] = {
+    [BC_SHIFT] = &&bc_shift, [BC_ADD] = &&bc_add,
+    [BC_OUTPUT] = &&bc_output, [BC_INPUT] = &&bc_input,
+    [BC_LOOP_BEGIN] = &&bc_loop_begin,
+    [BC_LOOP_END] = &&bc_loop_end,
+    [BC_ZERO] = &&bc_zero, [BC_MOVE_VALUE] = &&bc_move_value,
+    [BC_HLT] = &&bc_hlt, [BC_COMPILED_LOOP] = &&bc_compiled_loop,
+  };
+
+#define dispatch(pc) do {                       \
+    payload = get_payload(pc, 0);               \
+    bytecode = get_bytecode(pc);                \
+    goto *labels[bytecode];                     \
+  } while(0)
+
   |  push PTR
   |  mov  PTR, rdi
 
-  while (1) {
-    switch (get_bytecode(pc)) {
-      case BC_SHIFT:
-        | add PTR, get_payload(pc, 0)
-      	pc += get_total_length(BC_SHIFT);
-        break;
+  uint32_t payload;
+  byte bytecode;
 
-      case BC_ADD:
-        | add byte [PTR], get_payload(pc, 0)
-        pc += get_total_length(BC_ADD);
-        break;
+  dispatch(pc);
 
-      case BC_ZERO:
-        | mov byte [PTR], 0
-        pc += get_total_length(BC_ZERO);
-	break;
+bc_shift:
+  | add PTR, payload
+  pc += get_total_length(BC_SHIFT);
+  dispatch(pc);
 
-      case BC_MOVE_VALUE: {
-        int end_label = max_label;
-	max_label++;
-	dasm_growpc(&state, max_label);
+bc_add:
+  | add byte [PTR], payload
+  pc += get_total_length(BC_ADD);
+  dispatch(pc);
 
-        | cmp byte [PTR], 0
-        | je => end_label
-        | mov r8b, byte [PTR]
-        | add byte [PTR + get_payload(pc, 0)], r8b
-        | mov byte [PTR], 0
-        |=> end_label:
+bc_zero:
+  | mov byte [PTR], 0
+  pc += get_total_length(BC_ZERO);
+  dispatch(pc);
 
-	pc += get_total_length(BC_MOVE_VALUE);
-	break;
-      }
+bc_move_value: {
+  int end_label = max_label;
+  max_label++;
+  dasm_growpc(&state, max_label);
 
-      case BC_OUTPUT:
-        | movzx edi, byte [PTR]
-        | callp putchar
-	pc += get_total_length(BC_OUTPUT);
-        break;
+  | cmp byte [PTR], 0
+  | je => end_label
+  | mov r8b, byte [PTR]
+  | add byte [PTR + payload], r8b
+  | mov byte [PTR], 0
+  |=> end_label:
 
-      case BC_INPUT:
-        | callp getchar
-        | mov byte [PTR], al
-	pc += get_total_length(BC_INPUT);
-        break;
+  pc += get_total_length(BC_MOVE_VALUE);
+  dispatch(pc);
+}
 
-      case BC_LOOP_BEGIN: {
-      	assert(loop_stack_index < program->loop_nest_size);
+bc_output:
+  | movzx edi, byte [PTR]
+  | callp putchar
+  pc += get_total_length(BC_OUTPUT);
+  dispatch(pc);
 
-	max_label += 2;
-	loop_stack[loop_stack_index++] = max_label;
-	dasm_growpc(&state, max_label);
+bc_input:
+  | callp getchar
+  | mov byte [PTR], al
+  pc += get_total_length(BC_INPUT);
+  dispatch(pc);
 
-	int loop_begin = max_label - 1;
-	int loop_end = max_label - 2;
+bc_loop_begin: {
+  assert(loop_stack_index < program->loop_nest_size);
 
-        |=>(loop_begin):
-	| cmp byte [PTR], 0
-        | je => loop_end
+  max_label += 2;
+  loop_stack[loop_stack_index++] = max_label;
+  dasm_growpc(&state, max_label);
 
-	pc += get_total_length(BC_LOOP_BEGIN);
-        break;
-      }
+  int loop_begin = max_label - 1;
+  int loop_end = max_label - 2;
 
-      case BC_LOOP_END: {
-        int label_info = loop_stack[--loop_stack_index];
-	int loop_begin = label_info - 1;
-	int loop_end = label_info - 2;
+  |=>(loop_begin):
+  | cmp byte [PTR], 0
+  | je => loop_end
 
-	| jmp =>loop_begin
-	|=> loop_end:
+  pc += get_total_length(BC_LOOP_BEGIN);
+  dispatch(pc);
+}
 
-	if (loop_stack_index == 0) goto end_codegen;
+bc_loop_end: {
+  int label_info = loop_stack[--loop_stack_index];
+  int loop_begin = label_info - 1;
+  int loop_end = label_info - 2;
 
-        pc += get_total_length(BC_LOOP_END);
-	break;
-      }
+  | jmp =>loop_begin
+  |=> loop_end:
 
-      case BC_COMPILED_LOOP: {
-        void *compiled_code = program->compiled_code[get_payload(pc, 0)];
-	| mov rdi, PTR
-        | callp compiled_code
-        | mov PTR, rax
-	pc += get_payload(pc, 1);
-	break;
-      }
+  if (loop_stack_index == 0) goto end_codegen;
 
-      case BC_HLT:
-        | jmp =>end_label
-	pc += get_total_length(BC_HLT);
-	goto end_codegen;
-    }
-  }
+  pc += get_total_length(BC_LOOP_END);
+  dispatch(pc);
+}
+
+
+bc_compiled_loop: {
+  void *compiled_code = program->compiled_code[payload];
+  | mov rdi, PTR
+  | callp compiled_code
+  | mov PTR, rax
+  pc += get_payload(pc, 1);
+  dispatch(pc);
+}
+
+bc_hlt:
+  | jmp =>end_label
+  pc += get_total_length(BC_HLT);
+  dispatch(pc);
 
 end_codegen:
 
