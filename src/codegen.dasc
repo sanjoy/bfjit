@@ -39,6 +39,11 @@ static void codegen(program_t *program, dasm_State *state, byte *pc) {
         pc += get_total_length(BC_ADD);
         break;
 
+      case BC_ZERO:
+        | mov byte [PTR], 0
+        pc += get_total_length(BC_ZERO);
+	break;
+
       case BC_OUTPUT:
         | movzx edi, byte [PTR]
         | callp putchar

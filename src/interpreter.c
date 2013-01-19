@@ -12,6 +12,7 @@ void interpret(program_t *program, byte *arena, int arena_size) {
     [BC_OUTPUT] = &&bc_output, [BC_INPUT] = &&bc_input,
     [BC_LOOP_BEGIN] = &&bc_loop_begin,
     [BC_LOOP_END] = &&bc_loop_end,
+    [BC_ZERO] = &&bc_zero,
     [BC_HLT] = &&bc_hlt, [BC_COMPILED_LOOP] = &&bc_compiled_loop,
   };
 
@@ -37,6 +38,11 @@ bc_shift:
 bc_add:
   arena[arena_idx] += (int32_t) payload;
   pc += get_total_length(BC_ADD);
+  dispatch(pc);
+
+bc_zero:
+  arena[arena_idx] = 0;
+  pc += get_total_length(BC_ZERO);
   dispatch(pc);
 
 bc_output:

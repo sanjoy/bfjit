@@ -5,14 +5,49 @@
 
 #include "utils.h"
 
+/*  A brainfuck script is compiled into a sequence of bytecodes.  A
+ *  bytecode stream is a sequence of bytecodes followed by optional
+ *  "payloads", a bytecode specific packet of information.  Below,
+ *  payload[i] refers to the ith payload, retrievable by
+ *  get_payload(pc, i).  */
+
 enum bytecode {
   BC_INVALID,
-  BC_SHIFT,
-  BC_ADD,
-  BC_OUTPUT, BC_INPUT,
+
+  BC_SHIFT,  /*  shift the data pointer payload[0] places to the
+              *  right.  payload[0] may be negative.  */
+  BC_ADD,  /*  add payload[0] to the current cell.  */
+
+  BC_OUTPUT, BC_INPUT,  /*  input and output  */
+
   BC_LOOP_BEGIN, BC_LOOP_END,
-  BC_COMPILED_LOOP,
-  BC_HLT,
+  /* usual brainfuck looping constructs.
+   *
+   * BC_LOOP_BEGIN:
+   *
+   * payload[0] contains the index into the heat_counters array that
+   *   measures the heat of this loop.
+   *
+   * payload[1] contains the length of the loop including the pairing
+   *   BC_LOOP_END instruction.
+   *
+   *
+   * BC_LOOP_END:
+   *
+   * payload[0] contains the length of the loop excluding this
+   *   BC_LOOP_END instruction.
+   */
+
+  BC_COMPILED_LOOP,  /*  a loop that has been compiled to machine
+                      *  code.  Such loops are functions of the
+                      *  signature compiled_code_t.  */
+
+  BC_HLT, /*  end the brainfuck program  */
+
+
+
+  BC_ZERO, /*  optimization bytecode, shortcut for the sequence [-]  */
+
   BC_NUM_BYTECODES
 };
 
@@ -41,6 +76,7 @@ static int get_total_length(int bc) {
     case BC_OUTPUT:
     case BC_INPUT:
     case BC_HLT:
+    case BC_ZERO:
       return kByteCodeLen;
 
     case BC_SHIFT:

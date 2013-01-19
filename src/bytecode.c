@@ -39,14 +39,6 @@ static int32_t fold_actions(src_t *src, char increment, char decrement) {
   return effective_action;
 }
 
-byte *bc_from_source(const char *source, unsigned int *loop_stack_ui,
-		     int loop_stack_size) {
-  int capacity = 16;
-  uint32_t heat_counters_len = 0;
-
-  byte *bytecode = malloc(capacity);
-  int bytecode_len = 0;
-
 #define append_byte4(value) do {                        \
     if (unlikely(bytecode_len + 4 >= (capacity))) {     \
       capacity *= 2;                                    \
@@ -56,6 +48,44 @@ byte *bc_from_source(const char *source, unsigned int *loop_stack_ui,
     *((uint32_t *) location) = (uint32_t) (value);      \
     bytecode_len += 4;                                  \
   } while(0)
+
+
+/*  Optimize [-] to a direct zero assignment.  */
+static int nullifying_loop(byte **bc_ptr, int *bc_len_ptr, int *cap_ptr,
+                           int loop_begin_idx, int loop_length) {
+  byte *bytecode = *bc_ptr;
+  int bytecode_len = *bc_len_ptr;
+  int capacity = *cap_ptr;
+
+  int nullify_idiom_len =
+      get_total_length(BC_LOOP_BEGIN) + get_total_length(BC_ADD);
+
+  if (loop_length != nullify_idiom_len) return 0;
+
+  byte *loop_begin = &bytecode[loop_begin_idx];
+  byte *loop_body_begin = &loop_begin[get_total_length(BC_LOOP_BEGIN)];
+  if (get_bytecode(loop_body_begin) != BC_ADD ||
+      get_payload(loop_body_begin, 0) != -1) {
+    return 0;
+  }
+
+  bytecode_len -= nullify_idiom_len;
+  append_byte4(BC_ZERO);
+
+  *bc_len_ptr = bytecode_len;
+  *bc_ptr = bytecode;
+  *cap_ptr = capacity;
+
+  return 1;
+}
+
+byte *bc_from_source(const char *source, unsigned int *loop_stack_ui,
+		     int loop_stack_size) {
+  int capacity = 16;
+  uint32_t heat_counters_len = 0;
+
+  byte *bytecode = malloc(capacity);
+  int bytecode_len = 0;
 
   src_t src;
   src.src = source;
@@ -106,6 +136,12 @@ byte *bc_from_source(const char *source, unsigned int *loop_stack_ui,
         if (loop_stack_index == 0) die("unexpected `]'");
         uint32_t begin_pc = loop_stack[--loop_stack_index];
         uint32_t delta = bytecode_len - begin_pc;
+
+        if (nullifying_loop(&bytecode, &bytecode_len, &capacity, begin_pc,
+                            delta)) {
+          break;
+        }
+
         append_byte4(BC_LOOP_END);
         append_byte4(delta);
         byte *patch_pc = &bytecode[begin_pc] + kByteCodeLen + kPayloadLen;
@@ -145,6 +181,10 @@ void bc_dump(FILE *fptr, byte *pc) {
 
       case BC_ADD:
         fprintf(fptr, "add [value = %d]", get_payload(pc, 0));
+        break;
+
+      case BC_ZERO:
+        fprintf(fptr, "zero");
         break;
 
       case BC_OUTPUT:
