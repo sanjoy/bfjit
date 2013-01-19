@@ -23,6 +23,10 @@ program_t *p_new(const char *program_source, int loop_stack_size) {
       malloc(sizeof(compiled_code_t) * prog->compiled_code_capacity);
   prog->compiled_code_len = 0;
 
+  prog->codepages = NULL;
+  prog->begin = 0;
+  prog->limit = 0;
+
   for (int i = 0; i < kNumHeatCounters; i++) {
     prog->heat_counters[i] = kHotLoopThreshold;
   }

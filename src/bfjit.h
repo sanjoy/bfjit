@@ -16,6 +16,8 @@ typedef byte *(*compiled_code_t) (byte *arena);
 #define kNumHeatCounters 128
 #endif
 
+typedef struct codepage codepage_t;
+
 typedef struct {
   const char *src;
   byte *bytecode;
@@ -23,6 +25,10 @@ typedef struct {
   int compiled_code_len;
   int compiled_code_capacity;
   int heat_counters[kNumHeatCounters];
+
+  codepage_t *codepages;
+  intptr_t begin;
+  intptr_t limit;
 
   /*  program options */
   unsigned int *loop_stack;

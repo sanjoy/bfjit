@@ -9,37 +9,56 @@
 #include "codegen.inc"
 
 #include <sys/mman.h>
+#include <unistd.h>
 
-typedef struct {
+struct codepage {
   size_t size;
-  char code[0];
-} code_buf_t;
+  codepage_t *next;
+  byte page[];
+};
 
-static code_buf_t *make_exec(dasm_State **state) {
+static void ensure_space(program_t *program, size_t size) {
+  if (unlikely((program->begin + size) > program->limit)) {
+    int pagesize = getpagesize();
+
+    size += sizeof(codepage_t);
+    size = ((size + pagesize - 1) / pagesize) * pagesize;
+
+    codepage_t *new_page = mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC,
+                                MAP_ANON | MAP_PRIVATE, 0, 0);
+
+    assert(new_page != MAP_FAILED);
+
+    new_page->size = size;
+    new_page->next = program->codepages;
+    program->codepages = new_page;
+
+    program->begin = (intptr_t) new_page->page;
+    program->limit = (intptr_t) program + size;
+  }
+}
+
+static compiled_code_t make_exec(program_t *prog, dasm_State **state) {
   size_t size;
   int dasm_status = dasm_link(state, &size);
   assert(dasm_status == DASM_S_OK);
   (void) dasm_status;
 
-  // Allocate memory readable and writable so we can
-  // write the encoded instructions there.
-  code_buf_t *cbuf = mmap(NULL, size + sizeof(size_t), PROT_READ | PROT_WRITE,
-                          MAP_ANON | MAP_PRIVATE, 0, 0);
-  assert(cbuf != MAP_FAILED);
+  ensure_space(prog, size);
 
-  // Store length at the beginning of the region, so we
-  // can free it without additional context.
-  cbuf->size = size;
+  /*  For performance reasons, we care about page RWX access only in
+   *  when asserts are enabled.  */
+  /* assert(mprotect(prog->codepages, size, PROT_READ | PROT_WRITE) == 0); */
 
-  dasm_encode(state, cbuf->code);
+  compiled_code_t code = (compiled_code_t) prog->begin;
+  prog->begin += size;
+
+  dasm_encode(state, code);
   dasm_free(state);
 
-  // Adjust the memory permissions so it is executable
-  // but no longer writable.
-  dasm_status = mprotect(cbuf, size, PROT_EXEC | PROT_READ);
-  assert(dasm_status == 0);
+  /* assert(mprotect(prog->codepages, size, PROT_EXEC | PROT_READ) == 0); */
 
-  return cbuf;
+  return code;
 }
 
 int compile_and_install(program_t *p, byte *loop) {
@@ -49,7 +68,7 @@ int compile_and_install(program_t *p, byte *loop) {
 
   codegen(p, state, loop);
 
-  code_buf_t *cbuf = make_exec(&state);
+  compiled_code_t code = make_exec(p, &state);
 
   if (p->compiled_code_len == p->compiled_code_capacity) {
     p->compiled_code =
@@ -58,7 +77,7 @@ int compile_and_install(program_t *p, byte *loop) {
     p->compiled_code_capacity *= 2;
   }
 
-  p->compiled_code[p->compiled_code_len++] = (compiled_code_t) cbuf->code;
+  p->compiled_code[p->compiled_code_len++] = code;
 
   uint32_t *patch = (uint32_t *) loop;
   patch[0] = BC_COMPILED_LOOP;
@@ -67,14 +86,10 @@ int compile_and_install(program_t *p, byte *loop) {
   return p->compiled_code_len - 1;
 }
 
-static void free_compiled_blob(compiled_code_t code) {
-  byte *blob = (byte *) code;
-  code_buf_t *buf = (code_buf_t *) (blob - sizeof(size_t));
-  munmap(buf, buf->size);
-}
-
 void free_all_compiled_code(program_t *prog) {
-  for (int i = 0; i < prog->compiled_code_len; i++) {
-    free_compiled_blob(prog->compiled_code[i]);
+  for (codepage_t *cp_i = prog->codepages; cp_i; ) {
+    codepage_t *cp_j = cp_i->next;
+    munmap(cp_i, cp_i->size);
+    cp_i = cp_j;
   }
 }
