@@ -73,8 +73,8 @@ bc_loop_begin:
     dispatch(pc);
   }
   if (ENABLE_JIT) {
-    program->heat_counters[payload] --;
-    if (unlikely(program->heat_counters[payload] == 0)) {
+    int new_value = payload - 1;
+    if (payload == 0) {
       int location = compile_and_install(program, pc);
       if (likely(location != -1)) {
         byte *new_arena = program->compiled_code[location](&arena[arena_idx]);
@@ -82,8 +82,9 @@ bc_loop_begin:
         pc += get_payload(pc, 1);
         dispatch(pc);
       }
-      program->heat_counters[payload] = kHotLoopThreshold;
+      new_value = kHotLoopThreshold;
     }
+    ((uint32_t *) pc) [1] = new_value;
   }
   pc += get_total_length(BC_LOOP_BEGIN);
   dispatch(pc);

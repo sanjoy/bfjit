@@ -12,10 +12,6 @@ typedef byte *(*compiled_code_t) (byte *arena);
 #define kHotLoopThreshold 15
 #endif
 
-#ifndef kNumHeatCounters
-#define kNumHeatCounters 128
-#endif
-
 typedef struct codepage codepage_t;
 
 typedef struct {
@@ -24,7 +20,6 @@ typedef struct {
   compiled_code_t *compiled_code;
   int compiled_code_len;
   int compiled_code_capacity;
-  int heat_counters[kNumHeatCounters];
 
   codepage_t *codepages;
   intptr_t begin;

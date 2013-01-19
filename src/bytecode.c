@@ -124,7 +124,6 @@ peephole_pass(move_value) {
 byte *bc_from_source(const char *source, unsigned int *loop_stack_ui,
 		     int loop_stack_size) {
   int capacity = 16;
-  uint32_t heat_counters_len = 0;
 
   byte *bytecode = malloc(capacity);
   int bytecode_len = 0;
@@ -167,9 +166,7 @@ byte *bc_from_source(const char *source, unsigned int *loop_stack_ui,
 	if (loop_stack_index == loop_stack_size) die("stack overflow!");
         loop_stack[loop_stack_index++] = bytecode_len;
         append_byte4(BC_LOOP_BEGIN);
-        append_byte4(heat_counters_len);
-        heat_counters_len = (heat_counters_len + 1) % kNumHeatCounters;
-        /* we need not worry heat_counters_len wrapping around. */
+        append_byte4(kHotLoopThreshold);
         append_byte4(0); /* this will be adjusted on the `]'  */
         break;
 

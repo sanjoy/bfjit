@@ -27,10 +27,6 @@ program_t *p_new(const char *program_source, int loop_stack_size) {
   prog->begin = 0;
   prog->limit = 0;
 
-  for (int i = 0; i < kNumHeatCounters; i++) {
-    prog->heat_counters[i] = kHotLoopThreshold;
-  }
-
   return prog;
 }
 
