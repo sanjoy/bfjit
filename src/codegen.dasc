@@ -1,0 +1,109 @@
+|.arch x64
+|.actionlist actions
+|
+|// Use rbx as our cell pointer.
+|// Since rbx is a callee-save register, it will be preserved
+|// across our calls to getchar and putchar.
+|.define PTR, rbx
+|
+| // Macro for calling a function.
+| // In cases where our target is <=2**32 away we can use
+| //   | call &addr
+| // But since we don't know if it will be, we use this safe
+| // sequence instead.
+|.macro callp, addr
+|  mov64  rax, (uintptr_t)addr
+|  call   rax
+|.endmacro
+
+#define Dst &state
+
+static void codegen(program_t *program, dasm_State *state, byte *pc,
+                    int loop_nest_limit) {
+  unsigned *loop_stack = malloc(sizeof(unsigned int) * loop_nest_limit);
+  int loop_stack_index = 0;
+  unsigned int max_label = 1;
+  unsigned int end_label = 0;
+
+  |  push PTR
+  |  mov  PTR, rdi
+
+  while (1) {
+    switch (get_bytecode(pc)) {
+      case BC_SHIFT:
+        | add PTR, get_payload(pc, 0)
+      	pc += get_total_length(BC_SHIFT);
+        break;
+
+      case BC_ADD:
+        | add byte [PTR], get_payload(pc, 0)
+        pc += get_total_length(BC_ADD);
+        break;
+
+      case BC_OUTPUT:
+        | movzx edi, byte [PTR]
+        | callp putchar
+	pc += get_total_length(BC_OUTPUT);
+        break;
+
+      case BC_INPUT:
+        | callp getchar
+        | mov byte [PTR], al
+	pc += get_total_length(BC_INPUT);
+        break;
+
+      case BC_LOOP_BEGIN: {
+      	assert(loop_stack_index < loop_nest_limit);
+
+	max_label += 2;
+	loop_stack[loop_stack_index++] = max_label;
+	dasm_growpc(&state, max_label);
+
+	int loop_begin = max_label - 1;
+	int loop_end = max_label - 2;
+
+        |=>(loop_begin):
+	| cmp byte [PTR], 0
+        | je => loop_end
+
+	pc += get_total_length(BC_LOOP_BEGIN);
+        break;
+      }
+
+      case BC_LOOP_END: {
+        int label_info = loop_stack[--loop_stack_index];
+	int loop_begin = label_info - 1;
+	int loop_end = label_info - 2;
+
+	| jmp =>loop_begin
+	|=> loop_end:
+
+	if (loop_stack_index == 0) goto end_codegen;
+
+        pc += get_total_length(BC_LOOP_END);
+	break;
+      }
+
+      case BC_COMPILED_LOOP: {
+        void *compiled_code = program->compiled_code[get_payload(pc, 0)];
+	| mov rdi, PTR
+        | callp compiled_code
+        | mov PTR, rax
+	pc += get_payload(pc, 1);
+	break;
+      }
+
+      case BC_HLT:
+        | jmp =>end_label
+	pc += get_total_length(BC_HLT);
+	goto end_codegen;
+    }
+  }
+
+end_codegen:
+
+  |=> end_label:
+  | mov rax, PTR
+  | pop PTR
+  | ret
+}

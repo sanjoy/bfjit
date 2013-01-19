@@ -29,7 +29,7 @@ void interpret(program_t *program, byte *arena, int arena_size) {
 bc_shift:
   arena_idx += (int32_t) payload;
   if (unlikely(arena_idx < 0 || arena_idx >= arena_size)) {
-    die("arena pointer out of bounds!");
+    die("arena pointer out of bounds %d (%d)!", arena_idx, payload);
   }
   pc += get_total_length(BC_SHIFT);
   dispatch(pc);
@@ -53,15 +53,16 @@ bc_loop_begin:
   /*  A loop is expected to run at least a few times -- hence the
    *  `unlikely'  */
   if (unlikely(!arena[arena_idx])) {
-    uint32_t delta = get_payload(pc, 1);
-    pc += delta;
+    pc += get_payload(pc, 1);
     dispatch(pc);
   }
   program->heat_counters[payload] --;
   if (unlikely(program->heat_counters[payload] == 0)) {
     int location = compile_and_install(program, pc);
     if (likely(location != -1)) {
-      pc = program->compiled_code[location](arena);
+      byte *new_arena = program->compiled_code[location](&arena[arena_idx]);
+      arena_idx = (intptr_t) new_arena - (intptr_t) arena;
+      pc += get_payload(pc, 1);
       dispatch(pc);
     }
     program->heat_counters[payload] = kHotFunctionThreshold;
@@ -73,9 +74,13 @@ bc_loop_end:
   pc -= payload;
   dispatch(pc);
 
-bc_compiled_loop:
-  pc = program->compiled_code[get_payload(pc, 0)](arena);
+bc_compiled_loop: {
+  byte *new_arena =
+      program->compiled_code[get_payload(pc, 0)](&arena[arena_idx]);
+  arena_idx = (intptr_t) new_arena - (intptr_t) arena;
+  pc += get_payload(pc, 1);
   dispatch(pc);
+}
 
 bc_hlt:
   return;

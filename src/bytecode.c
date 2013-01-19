@@ -87,6 +87,7 @@ byte *bc_from_source(const char *source, int loop_nest_limit) {
 
       case '[':
         src.index++;
+	if (loop_stack_len == loop_nest_limit) die("stack overflow!");
         loop_stack[loop_stack_len++] = bytecode_len;
         append_byte4(BC_LOOP_BEGIN);
         append_byte4(heat_counters_len);

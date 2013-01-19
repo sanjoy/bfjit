@@ -37,17 +37,17 @@ static uint32_t get_payload(byte *pc, int payload_index) {
 
 static int get_total_length(int bc) {
   switch (bc) {
-    case BC_SHIFT:
-    case BC_ADD:
-    case BC_LOOP_END:
-    case BC_COMPILED_LOOP:
-      return kByteCodeLen + kPayloadLen;
-
     case BC_OUTPUT:
     case BC_INPUT:
     case BC_HLT:
       return kByteCodeLen;
 
+    case BC_SHIFT:
+    case BC_ADD:
+    case BC_LOOP_END:
+      return kByteCodeLen + kPayloadLen;
+
+    case BC_COMPILED_LOOP:
     case BC_LOOP_BEGIN:
       return kByteCodeLen + 2 * kPayloadLen;
   }
