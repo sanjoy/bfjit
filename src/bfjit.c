@@ -9,11 +9,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-program_t *p_new(const char *program_source) {
+program_t *p_new(const char *program_source, int loop_stack_size) {
   program_t *prog = malloc(sizeof(program_t));
 
+  prog->loop_stack_size = loop_stack_size;
+  prog->loop_stack = malloc(loop_stack_size);
+
   prog->src = program_source;
-  prog->bytecode = bc_from_source(program_source, 1024);
+  prog->bytecode =
+       bc_from_source(program_source, prog->loop_stack, loop_stack_size);
   prog->compiled_code_capacity = 16;
   prog->compiled_code =
       malloc(sizeof(compiled_code_t) * prog->compiled_code_capacity);
@@ -36,7 +40,4 @@ void p_destroy(program_t *prog) {
   free(prog->bytecode);
   free(prog->compiled_code);
   free(prog);
-}
-
-void p_print_bc(FILE *fptr, program_t *prog) {
 }

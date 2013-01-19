@@ -47,7 +47,7 @@ int compile_and_install(program_t *p, byte *loop) {
   dasm_init(&state, 1);
   dasm_setup(&state, actions);
 
-  codegen(p, state, loop, 1024);
+  codegen(p, state, loop);
 
   code_buf_t *cbuf = make_exec(&state);
 

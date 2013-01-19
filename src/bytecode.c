@@ -1,5 +1,6 @@
 #include "bytecode.h"
 
+#include <assert.h>
 #include <stdlib.h>
 
 #define LIMIT ((int) ((1 << 30) - 1))
@@ -36,7 +37,8 @@ static int32_t fold_actions(src_t *src, char increment, char decrement) {
   return effective_action;
 }
 
-byte *bc_from_source(const char *source, int loop_nest_limit) {
+byte *bc_from_source(const char *source, unsigned int *loop_stack_ui,
+		     int loop_stack_size) {
   int capacity = 16;
   uint32_t heat_counters_len = 0;
 
@@ -57,8 +59,9 @@ byte *bc_from_source(const char *source, int loop_nest_limit) {
   src.src = source;
   src.index = 0;
 
-  uint32_t *loop_stack = malloc(sizeof(uint32_t) * loop_nest_limit);
-  int loop_stack_len = 0;
+  assert(sizeof(unsigned int) >= sizeof(uint32_t));
+  uint32_t *loop_stack = (uint32_t *) loop_stack_ui;
+  int loop_stack_index = 0;
 
   while (1) {
     char c = src.src[src.index];
@@ -87,8 +90,8 @@ byte *bc_from_source(const char *source, int loop_nest_limit) {
 
       case '[':
         src.index++;
-	if (loop_stack_len == loop_nest_limit) die("stack overflow!");
-        loop_stack[loop_stack_len++] = bytecode_len;
+	if (loop_stack_index == loop_stack_size) die("stack overflow!");
+        loop_stack[loop_stack_index++] = bytecode_len;
         append_byte4(BC_LOOP_BEGIN);
         append_byte4(heat_counters_len);
         heat_counters_len = (heat_counters_len + 1) % 256;
@@ -98,8 +101,8 @@ byte *bc_from_source(const char *source, int loop_nest_limit) {
 
       case ']': {
         src.index++;
-        if (loop_stack_len == 0) die("unexpected `]'");
-        uint32_t begin_pc = loop_stack[--loop_stack_len];
+        if (loop_stack_index == 0) die("unexpected `]'");
+        uint32_t begin_pc = loop_stack[--loop_stack_index];
         uint32_t delta = bytecode_len - begin_pc;
         append_byte4(BC_LOOP_END);
         append_byte4(delta);
@@ -118,8 +121,7 @@ byte *bc_from_source(const char *source, int loop_nest_limit) {
 
 end:
   append_byte4(BC_HLT);
-  if (loop_stack_len != 0) die("unterminated loop!");
-  free(loop_stack);
+  if (loop_stack_index != 0) die("unterminated loop!");
   return bytecode;
 }
 

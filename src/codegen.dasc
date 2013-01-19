@@ -18,9 +18,8 @@
 
 #define Dst &state
 
-static void codegen(program_t *program, dasm_State *state, byte *pc,
-                    int loop_nest_limit) {
-  unsigned *loop_stack = malloc(sizeof(unsigned int) * loop_nest_limit);
+static void codegen(program_t *program, dasm_State *state, byte *pc) {
+  unsigned *loop_stack = program->loop_stack;
   int loop_stack_index = 0;
   unsigned int max_label = 1;
   unsigned int end_label = 0;
@@ -53,7 +52,7 @@ static void codegen(program_t *program, dasm_State *state, byte *pc,
         break;
 
       case BC_LOOP_BEGIN: {
-      	assert(loop_stack_index < loop_nest_limit);
+      	assert(loop_stack_index < program->loop_nest_size);
 
 	max_label += 2;
 	loop_stack[loop_stack_index++] = max_label;

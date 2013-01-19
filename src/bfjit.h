@@ -18,9 +18,13 @@ typedef struct {
   int compiled_code_len;
   int compiled_code_capacity;
   int heat_counters[kNumHeatCounters];
+
+  /*  program options */
+  unsigned int *loop_stack;
+  int loop_stack_size;
 } program_t;
 
-program_t *p_new(const char *source);
+program_t *p_new(const char *source, int maximum_loop_nesting);
 void p_exec(program_t *program, int min_arena_size);
 void p_destroy(program_t *program);
 

@@ -28,7 +28,7 @@ static char *read_whole_file(const char *file_name) {
 
 static void dispatch(const char *file_name, int print_only) {
   char *source = read_whole_file(file_name);
-  program_t *prog = p_new(source);
+  program_t *prog = p_new(source, 1024);
   if (print_only) {
     bc_dump(stdout, prog->bytecode);
   } else {

@@ -16,7 +16,8 @@ enum bytecode {
   BC_NUM_BYTECODES
 };
 
-byte *bc_from_source(const char *source, int loop_nest_limit);
+byte *bc_from_source(const char *source, unsigned int *loop_stack,
+                     int loop_stack_size);
 void bc_dump(FILE *fptr, byte *bc);
 
 #define kByteCodeLen 4
