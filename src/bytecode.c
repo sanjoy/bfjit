@@ -76,6 +76,16 @@ static int32_t fold_actions(src_t *src, char increment, char decrement) {
 #define peephole_failed                         \
   return 0;
 
+#define peep_bc_check(bc, payload)                              \
+  peep_check(get_bytecode(loop_body_begin) == bc &&             \
+             get_payload(loop_body_begin, 0) == payload)        \
+  loop_body_begin += get_total_length(bc)
+
+#define peep_bc_bind_pl0(bc, pl_var)                    \
+  peep_check(get_bytecode(loop_body_begin) == bc);      \
+  pl_var = get_payload(loop_body_begin, 0);             \
+  loop_body_begin += get_total_length(bc);
+
 #define peep_check(condn) if (!(condn)) peephole_failed
 
 /*  Optimize [-] to a direct zero assignment.  */
@@ -83,9 +93,7 @@ peephole_pass(nullifying_loop) {
   peephole_prologue;
 
   peep_check(loop_body_length == get_total_length(BC_ADD));
-
-  peep_check(get_bytecode(loop_body_begin) == BC_ADD &&
-             get_payload(loop_body_begin, 0) == -1);
+  peep_bc_check(BC_ADD, -1);
 
   bytecode_len -= loop_length;
   append_byte4(BC_ZERO);
@@ -99,22 +107,12 @@ peephole_pass(move_value) {
                               2 * get_total_length(BC_SHIFT);
 
   peep_check(loop_body_length == expected_length);
+  uint32_t distance;
 
-  peep_check(get_bytecode(loop_body_begin) == BC_ADD);
-  peep_check(get_payload(loop_body_begin, 0) == -1);
-  loop_body_begin += get_total_length(BC_ADD);
-
-  peep_check(get_bytecode(loop_body_begin) == BC_SHIFT);
-  uint32_t distance = get_payload(loop_body_begin, 0);
-  loop_body_begin += get_total_length(BC_SHIFT);
-
-  peep_check(get_bytecode(loop_body_begin) == BC_ADD);
-  peep_check(get_payload(loop_body_begin, 0) == 1);
-  loop_body_begin += get_total_length(BC_ADD);
-
-  peep_check(get_bytecode(loop_body_begin) == BC_SHIFT);
-  peep_check(get_payload(loop_body_begin, 0) == -distance);
-  loop_body_begin += get_total_length(BC_SHIFT);
+  peep_bc_check(BC_ADD, -1);
+  peep_bc_bind_pl0(BC_SHIFT, distance);
+  peep_bc_check(BC_ADD, 1);
+  peep_bc_check(BC_SHIFT, -distance);
 
   bytecode_len -= loop_length;
   append_byte4(BC_MOVE_VALUE);
