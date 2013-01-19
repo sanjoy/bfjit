@@ -37,6 +37,7 @@ void p_exec(program_t *program, int arena_size) {
 }
 
 void p_destroy(program_t *prog) {
+  free_all_compiled_code(prog);
   free(prog->bytecode);
   free(prog->compiled_code);
   free(prog);

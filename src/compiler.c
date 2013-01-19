@@ -66,3 +66,15 @@ int compile_and_install(program_t *p, byte *loop) {
 
   return p->compiled_code_len - 1;
 }
+
+static void free_compiled_blob(compiled_code_t code) {
+  byte *blob = (byte *) code;
+  code_buf_t *buf = (code_buf_t *) (blob - sizeof(size_t));
+  munmap(buf, buf->size);
+}
+
+void free_all_compiled_code(program_t *prog) {
+  for (int i = 0; i < prog->compiled_code_len; i++) {
+    free_compiled_blob(prog->compiled_code[i]);
+  }
+}
