@@ -24,8 +24,8 @@ static void ensure_space(program_t *program, size_t size) {
     size += sizeof(codepage_t);
     size = ((size + pagesize - 1) / pagesize) * pagesize;
 
-    codepage_t *new_page = mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC,
-                                MAP_ANON | MAP_PRIVATE, 0, 0);
+    codepage_t *new_page =
+        mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, 0, 0);
 
     assert(new_page != MAP_FAILED);
 
@@ -48,7 +48,10 @@ static compiled_code_t make_exec(program_t *prog, dasm_State **state) {
 
   /*  For performance reasons, we care about page RWX access only in
    *  when asserts are enabled.  */
-  /* assert(mprotect(prog->codepages, size, PROT_READ | PROT_WRITE) == 0); */
+  int result =
+      mprotect(prog->codepages, prog->codepages->size, PROT_READ | PROT_WRITE);
+  assert(result == 0);
+  (void) result;
 
   compiled_code_t code = (compiled_code_t) prog->begin;
   prog->begin += size;
@@ -56,7 +59,9 @@ static compiled_code_t make_exec(program_t *prog, dasm_State **state) {
   dasm_encode(state, code);
   dasm_free(state);
 
-  /* assert(mprotect(prog->codepages, size, PROT_EXEC | PROT_READ) == 0); */
+  result = mprotect(prog->codepages, size, PROT_EXEC | PROT_READ);
+  assert(result == 0);
+  (void) result;
 
   return code;
 }
