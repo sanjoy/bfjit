@@ -12,7 +12,7 @@ typedef struct {
   int index;
 } src_t;
 
-static int is_bfuck_op(char c) {
+static bool is_bfuck_op(char c) {
   return c == '<' || c == '>' || c == '+' || c == '-' ||
          c == '.' || c == ',' || c == '[' || c == ']';
 }
@@ -20,7 +20,7 @@ static int is_bfuck_op(char c) {
 static int32_t fold_actions(src_t *src, char increment, char decrement) {
   int effective_action = 0;
 
-  while (1) {
+  while (true) {
     char c = src->src[src->index];
     if (c == 0) break;
 
@@ -50,7 +50,7 @@ static int32_t fold_actions(src_t *src, char increment, char decrement) {
   } while(0)
 
 #define peephole_pass(name)                                             \
-  static int peephole_ ## name (                                        \
+  static bool peephole_ ## name (                                       \
       byte **bc_ptr, int *bc_len_ptr, int *cap_ptr, int loop_begin_idx, \
       int loop_length)
 
@@ -71,10 +71,10 @@ static int32_t fold_actions(src_t *src, char increment, char decrement) {
   *bc_len_ptr = bytecode_len;                   \
   *bc_ptr = bytecode;                           \
   *cap_ptr = capacity;                          \
-  return 1;
+  return true;
 
 #define peephole_failed                         \
-  return 0;
+  return false;
 
 #define peep_bc_check(bc, payload)                              \
   peep_check(get_bytecode(loop_body_begin) == bc &&             \
@@ -136,7 +136,7 @@ byte *bc_from_source(const char *source, unsigned int *loop_stack_ui,
   uint32_t *loop_stack = (uint32_t *) loop_stack_ui;
   int loop_stack_index = 0;
 
-  while (1) {
+  while (true) {
     char c = src.src[src.index];
     switch (c) {
       case '<':
@@ -209,7 +209,7 @@ end:
 
 void bc_dump(FILE *fptr, byte *pc) {
   intptr_t begin = (intptr_t) pc;
-  while (1) {
+  while (true) {
     fprintf(fptr, "%d: ", (int) ((intptr_t) pc - begin));
 
     int bc = get_bytecode(pc);
