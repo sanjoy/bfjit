@@ -125,7 +125,7 @@ byte *bc_from_source(const char *source, unsigned int *loop_stack_ui,
 		     int loop_stack_size) {
   int capacity = 16;
 
-  byte *bytecode = malloc(capacity);
+  byte *bytecode = alloc(capacity);
   int bytecode_len = 0;
 
   src_t src;

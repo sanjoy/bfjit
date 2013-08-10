@@ -14,7 +14,7 @@ static char *read_whole_file(const char *file_name) {
   size_t file_size = ftell(fptr);
   fseek(fptr, 0, SEEK_SET);
 
-  char *file_contents = malloc(file_size + 1);
+  char *file_contents = alloc(file_size + 1);
   file_contents[file_size] = 0;
 
   size_t result = fread(file_contents, 1, file_size, fptr);
