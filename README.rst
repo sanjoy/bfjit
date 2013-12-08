@@ -68,9 +68,9 @@ There are two improvements I can think of, believe will improve
 performance, but haven’t had time to implement:
 
  * A register allocator should improve performance, but probably not
-as much as in normal programming languages -- BF is a very cache
-friendly language. :)
+   as much as in normal programming languages -- BF is a very cache
+   friendly language. :)
 
  * Some basic auto-vectorization. Maybe we can say "this loop simply
-adds these two blocks of cells together, one by one" and emit some SSE
-instructions to that effect.
+   adds these two blocks of cells together, one by one" and emit some
+   SSE instructions to that effect.
