@@ -1,6 +1,6 @@
 .PHONY: all clean
 
-CFLAGS=-O3 -Wall -g -std=gnu99 -DNDEBUG -I./
+CFLAGS=-O3 -Wall -Werror -Wno-unused-function -Wno-unused-result -g -std=gnu99 -DNDEBUG -I./
 HEADERS=src/bfjit.h src/utils.h src/compiler.h src/interpreter.h src/bytecode.h \
 	codegen.inc
 
