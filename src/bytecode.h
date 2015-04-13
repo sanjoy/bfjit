@@ -48,8 +48,8 @@ enum bytecode {
 
   BC_ZERO, /*  optimization bytecode, shortcut for the sequence [-]  */
 
-  BC_MOVE_VALUE, /*  cell[current] += cell[current + payload[0]]
-                  *  cell[current + payload[0]] = 0  */
+  BC_MOVE_VALUE, /*  cell[current + payload[0]] += cell[current]
+                  *  cell[current] = 0  */
 
   BC_NUM_BYTECODES
 };
