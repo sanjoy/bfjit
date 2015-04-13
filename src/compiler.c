@@ -34,7 +34,7 @@ static void ensure_space(program_t *program, size_t size) {
     program->codepages = new_page;
 
     program->begin = (intptr_t) new_page->page;
-    program->limit = (intptr_t) program + size;
+    program->limit = (intptr_t) program->begin + size;
   }
 }
 
